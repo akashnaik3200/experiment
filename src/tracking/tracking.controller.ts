@@ -1,9 +1,7 @@
 import { Controller, Get, Req, UseGuards } from '@nestjs/common';
 
-import {
-  AuthenticatedProjectRequest,
-  ProjectAuthGuard,
-} from '../projects/guards/project-auth.guard';
+import { ProjectAuthGuard } from '../projects/guards/project-auth.guard';
+import { AuthenticatedProjectRequest } from '../projects/interfaces/authenticated-project-request.interface';
 
 @Controller('v1/tracking')
 @UseGuards(ProjectAuthGuard)

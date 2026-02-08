@@ -6,17 +6,18 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Request } from 'express';
+import { validate as isUuid } from 'uuid';
 import { Repository } from 'typeorm';
 
+import { AuthenticatedProjectRequest } from '../interfaces/authenticated-project-request.interface';
 import { Project, ProjectStatus } from '../project.entity';
-
-export interface AuthenticatedProjectRequest extends Request {
-  project: Project;
-}
 
 @Injectable()
 export class ProjectAuthGuard implements CanActivate {
+  private static readonly PROJECT_ID_HEADER = 'x-project-id';
+
+  private static readonly PUBLIC_KEY_HEADER = 'x-public-key';
+
   constructor(
     @InjectRepository(Project)
     private readonly projectsRepository: Repository<Project>,
@@ -25,13 +26,17 @@ export class ProjectAuthGuard implements CanActivate {
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context
       .switchToHttp()
-      .getRequest<Partial<AuthenticatedProjectRequest>>();
+      .getRequest<AuthenticatedProjectRequest>();
 
-    const projectId = this.readHeader(request, 'x-project-id');
-    const publicKey = this.readHeader(request, 'x-public-key');
+    const projectId = this.readHeader(request, ProjectAuthGuard.PROJECT_ID_HEADER);
+    const publicKey = this.readHeader(request, ProjectAuthGuard.PUBLIC_KEY_HEADER);
 
     if (!projectId || !publicKey) {
       throw new UnauthorizedException('Missing project authentication headers');
+    }
+
+    if (!isUuid(projectId)) {
+      throw new UnauthorizedException('Invalid project credentials');
     }
 
     const project = await this.projectsRepository.findOne({
@@ -52,15 +57,18 @@ export class ProjectAuthGuard implements CanActivate {
   }
 
   private readHeader(
-    request: Partial<Request>,
+    request: Pick<AuthenticatedProjectRequest, 'headers'>,
     headerName: string,
   ): string | undefined {
     const value = request.headers?.[headerName];
+    const normalizedValue = Array.isArray(value) ? value[0] : value;
 
-    if (Array.isArray(value)) {
-      return value[0];
+    if (typeof normalizedValue !== 'string') {
+      return undefined;
     }
 
-    return value;
+    const trimmed = normalizedValue.trim();
+
+    return trimmed.length > 0 ? trimmed : undefined;
   }
 }
